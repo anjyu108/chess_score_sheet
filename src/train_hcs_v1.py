@@ -10,6 +10,17 @@ import argparse
 
 # TODO introduce logger
 
+
+# TODO fix hardcoded character list
+characters_list = ['#', '+', '=',
+                   '-', 'O',
+                   'x',
+                   '1', '2', '3', '4', '5', '6', '7', '8', '9',
+                   'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h',
+                   'B', 'K', 'N', 'P', 'Q', 'R',
+                   ]
+max_len = 6
+
 # Split Dataset into 1) train-90% 2) validation-5% 3) test-5%
 train_ratio = {
         "train": 0.9,
@@ -303,24 +314,13 @@ def main(args):
     ######################
     dataset_map = get_dataset(args)
 
-    # Build the character vocabulary
-    global max_len  # FIXME global variable
-    max_len = 0
-    characters = set()
-
-    for label in dataset_map["train"]["labels"]:
-        max_len = max(max_len, len(label))
-        for char in label:
-            characters.add(char)
-
-    characters = sorted(list(characters))
-
+    print("characters:", characters_list)
     print("Maximum length: ", max_len)
-    print("Vocab size: ", len(characters))
+    print("Vocab size: ", len(characters_list))
 
     # Mapping characters to integers.
     global char_to_num
-    char_to_num = StringLookup(vocabulary=list(characters), mask_token=None)
+    char_to_num = StringLookup(vocabulary=characters_list, mask_token=None)
 
     # Mapping integers back to original characters.
     global num_to_char
@@ -368,16 +368,6 @@ def main(args):
     ################
     model = keras.saving.load_model(args.pretrained_model)
     model.summary()
-    # print(type(model))
-    # return
-
-    # # Adjust model from IAM to HCS dataset
-    # layer_id = XX
-    # new_layer = XX
-    # replace_intermediate_layer_in_keras(model, layer_id, new_layer)
-    # model.summary()
-
-    # return
 
     ############
     # Training #
