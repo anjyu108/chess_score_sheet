@@ -469,6 +469,7 @@ def main(args):
     f.write("img_path,prediction_unconfidence,predicted_text")
     for batch_idx, batch in enumerate(test_ds):
         batch_images = batch["image"]
+        batch_labels = batch["label"]
         _, ax = plt.subplots(4, 4, figsize=(15, 8))
 
         preds = prediction_model.predict(batch_images)
@@ -488,14 +489,21 @@ def main(args):
                 break
 
             img = batch_images[i]
+            label = batch_labels[i]
             img = tf.image.flip_left_right(img)
             img = tf.transpose(img, perm=[1, 0, 2])
             img = (img * 255.0).numpy().clip(0, 255).astype(np.uint8)
             img = img[:, :, 0]
 
-            title = f"Pred: {pred_texts[i]} (unconf: {pred_confidence[i][0]:.3})"
+            # 99 is treated as an UNKNOWN token.
+            label_string = tf.strings.reduce_join(num_to_char(list(filter(lambda x: x != 99, label)))).numpy().decode("utf-8")
+
+            title = f"Pred: {pred_texts[i]}\n(label: {label_string})\n(unconf: {pred_confidence[i][0]:.3})"
             ax[i // 4, i % 4].imshow(img, cmap="gray")
-            ax[i // 4, i % 4].set_title(title)
+            if label_string == pred_texts[i]:
+                ax[i // 4, i % 4].set_title(title)
+            else:
+                ax[i // 4, i % 4].set_title(title, color="red")
             ax[i // 4, i % 4].axis("off")
 
         if args.plt_save:
