@@ -210,6 +210,8 @@ def main(args):
 
     print("Start testing")
 
+    os.makedirs(args.output, exist_ok=True)
+
     # A utility function to decode the output of the network.
     def decode_batch_predictions(pred):
         input_len = np.ones(pred.shape[0]) * pred.shape[1]
@@ -230,7 +232,7 @@ def main(args):
     labels = dataset_map_ncs["all"]["labels"]
     test_ds = prepare_dataset(img_paths, labels)
 
-    f = open(args.predict_output, 'w')
+    f = open(os.path.join(args.output, "ncs_predict_result.txt"), 'w')
     f.write("img_path,prediction_unconfidence,predicted_text\n")
     for batch_idx, batch in enumerate(test_ds):
         batch_images = batch["image"]
@@ -264,7 +266,7 @@ def main(args):
             ax[i // 4, i % 4].axis("off")
 
         if batch_idx == 0:
-            plt.savefig(args.predict_output_sample_plt)
+            plt.savefig(os.path.join(args.output, "ncs_predict_result.png"))
     f.close()
 
     print("End testing")
@@ -273,9 +275,8 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--input_pred', default="data/kanagawa_champ_2023/images_move/1/")
+    parser.add_argument('--output', default="output_ncs")
     parser.add_argument('--pretrained_model', default="output_model_hcs/")
-    parser.add_argument('--predict_output', default="output/ncs_predict_result.txt")
-    parser.add_argument('--predict_output_sample_plt', default="output/ncs_predict_result.png")
     parser.add_argument('--random_seed', '-r', type=int, default=None)
     args = parser.parse_args()
 

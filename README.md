@@ -16,10 +16,10 @@ python3 script/extract_image_from_pdf.py
 ls data/kanagawa_champ_2023/images/  # -> 1.jpeg, 2.jpeg, ...
 
 # Train the model with IAM dataset
-python3 src/train_iam.py
+python3 src/train_iam.py  # -> output_model/predict_samples.png
 
 # Train the model with HCS dataset with pre-trained model of IAM dataset
-# TODO: add procedure of traing with HCS dataset
+python3 src/train_hcs_v1.py --train_model  # -> output_model_hcs/prediction_samples_{batch_idx}.png
 
 for f in $(ls data/kanagawa_champ_2023/images/);do
     # NOTE: set --move_num appropriately to remove blank move
