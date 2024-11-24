@@ -10,6 +10,17 @@ import argparse
 
 # TODO introduce logger
 
+
+# TODO fix hardcoded character list
+characters_list = ['#', '+', '=',
+                   '-', 'O',
+                   'x',
+                   '1', '2', '3', '4', '5', '6', '7', '8', '9',
+                   'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h',
+                   'B', 'K', 'N', 'P', 'Q', 'R',
+                   ]
+max_len = 6
+
 # Split Dataset into 1) train-90% 2) validation-5% 3) test-5%
 train_ratio = {
         "train": 0.9,
@@ -61,89 +72,6 @@ def get_dataset_ncs(args):
     ret = {
         "all": {"img_paths": image_path_list,
                 "labels": ['dummy' for i in range(len(image_path_list))]},
-           }
-
-    return ret
-
-
-def get_dataset(args):
-    """
-    Load IAM dataset
-    Args:
-        args: input option with argparser
-    """
-    words_list = []
-
-    words = open(f"{args.input}/train_val_data.txt", "r").readlines()
-    for line in words:
-        if line[0] == "#":
-            continue
-        words_list.append(line)
-
-    np.random.shuffle(words_list)
-
-    split_idx = int(train_ratio["train"] * len(words_list))
-    train_samples = words_list[:split_idx]
-    test_samples = words_list[split_idx:]
-
-    validation_ratio = train_ratio["validation"] / (1 - train_ratio["train"])
-    val_split_idx = int(validation_ratio * len(test_samples))
-    validation_samples = test_samples[:val_split_idx]
-    test_samples = test_samples[val_split_idx:]
-
-    # Print splitting results
-    print(f"Number of words_list: {len(words_list)}")
-    print(f"Total training samples: {len(train_samples)}")
-    print(f"Total validation samples: {len(validation_samples)}")
-    print(f"Total test samples: {len(test_samples)}")
-
-    # Create the list of image path and labels (w/ all the info)
-
-    base_image_path = args.input
-
-    def get_image_paths_and_labels(samples):
-        paths = []
-        corrected_samples = []
-        for (i, file_line) in enumerate(samples):
-            line_split = file_line.strip()
-            line_split = line_split.split(" ")
-
-            image_path = line_split[0]
-            img_path = os.path.join(
-                base_image_path, image_path
-            )
-            if os.path.getsize(img_path):
-                paths.append(img_path)
-                corrected_samples.append(file_line.split("\n")[0])
-
-        return paths, corrected_samples
-
-    train_img_paths, train_labels = get_image_paths_and_labels(train_samples)
-    validation_img_paths, validation_labels = get_image_paths_and_labels(validation_samples)
-    test_img_paths, test_labels = get_image_paths_and_labels(test_samples)
-
-    # Create the list of `clean` labels (w/ only the transcription part of the label )
-    def clean_labels(labels):
-        """
-        `clean` means only the transcription part of the label
-        """
-        cleaned_labels = []
-        for label in labels:
-            label = label.split(" ")[-1].strip()
-            cleaned_labels.append(label)
-        return cleaned_labels
-
-    train_labels_cleaned = clean_labels(train_labels)
-    validation_labels_cleaned = clean_labels(validation_labels)
-    test_labels_cleaned = clean_labels(test_labels)
-
-    ret = {
-        "train":      {"img_paths": train_img_paths,
-                       "labels": train_labels_cleaned},
-        "validation": {"img_paths": validation_img_paths,
-                       "labels": validation_labels_cleaned},
-        "test":       {"img_paths": test_img_paths,
-                       "labels": test_labels_cleaned},
            }
 
     return ret
@@ -251,68 +179,20 @@ def main(args):
     ######################
     # Dataset preprocess #
     ######################
-    dataset_map = get_dataset(args)
     dataset_map_ncs = get_dataset_ncs(args)
 
-    # Build the character vocabulary
-    global max_len  # FIXME global variable
-    max_len = 0
-    characters = set()
-
-    for label in dataset_map["train"]["labels"]:
-        max_len = max(max_len, len(label))
-        for char in label:
-            characters.add(char)
-
-    characters = sorted(list(characters))
-
     print("Maximum length: ", max_len)
-    print("Vocab size: ", len(characters))
+    print("Vocab size: ", len(characters_list))
 
     # Mapping characters to integers.
     global char_to_num
-    char_to_num = StringLookup(vocabulary=list(characters), mask_token=None)
+    char_to_num = StringLookup(vocabulary=characters_list, mask_token=None)
 
     # Mapping integers back to original characters.
     global num_to_char
     num_to_char = StringLookup(
         vocabulary=char_to_num.get_vocabulary(), mask_token=None, invert=True
     )
-
-    train_ds = prepare_dataset(dataset_map["train"]["img_paths"],
-                               dataset_map["train"]["labels"])
-    validation_ds = prepare_dataset(dataset_map["validation"]["img_paths"],
-                                    dataset_map["validation"]["labels"])
-    test_ds = prepare_dataset(dataset_map["test"]["img_paths"],
-                              dataset_map["test"]["labels"])
-
-    # print dataset samples
-    for data in train_ds.take(1):
-        images, labels = data["image"], data["label"]
-
-        _, ax = plt.subplots(4, 4, figsize=(15, 8))
-
-        for i in range(16):
-            img = images[i]
-            img = tf.image.flip_left_right(img)
-            img = tf.transpose(img, perm=[1, 0, 2])
-            img = (img * 255.0).numpy().clip(0, 255).astype(np.uint8)
-            img = img[:, :, 0]
-
-            # Gather indices where label!= padding_token.
-            label = labels[i]
-            indices = tf.gather(label, tf.where(
-                tf.math.not_equal(label, model_params.padding_token)))
-            # Convert to string.
-            label = tf.strings.reduce_join(num_to_char(indices))
-            label = label.numpy().decode("utf-8")
-
-            ax[i // 4, i % 4].imshow(img, cmap="gray")
-            ax[i // 4, i % 4].set_title(label)
-            ax[i // 4, i % 4].axis("off")
-
-    if args.plt_save:
-        plt.savefig('input_samples.png')
 
     ################
     # Define model #
@@ -383,8 +263,8 @@ def main(args):
             ax[i // 4, i % 4].set_title(title)
             ax[i // 4, i % 4].axis("off")
 
-        if args.plt_save:
-            plt.savefig(f"output/prediction_samples_{batch_idx}.png")
+        if batch_idx == 0:
+            plt.savefig(args.predict_output_sample_plt)
     f.close()
 
     print("End testing")
@@ -392,12 +272,11 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input', '-i', default="data/HCS_Dataset_December_2021/extracted_move_boxes/")
-    parser.add_argument('--input_pred', default="data/kanagawa_champ_2023/images/R1_B1_player1_sheet1.png_moves")
+    parser.add_argument('--input_pred', default="data/kanagawa_champ_2023/images_move/1/")
     parser.add_argument('--pretrained_model', default="output_model_hcs/")
     parser.add_argument('--predict_output', default="output/ncs_predict_result.txt")
+    parser.add_argument('--predict_output_sample_plt', default="output/ncs_predict_result.png")
     parser.add_argument('--random_seed', '-r', type=int, default=None)
-    parser.add_argument('--plt_save', '-p', action='store_true')
     args = parser.parse_args()
 
     main(args)
