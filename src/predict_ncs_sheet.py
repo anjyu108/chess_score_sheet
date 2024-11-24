@@ -66,12 +66,53 @@ def get_dataset_ncs(args):
     Args:
         args: input option with argparser
     """
-    image_path_list = os.listdir(args.input_pred)
+    all_line = open(args.input_label, "r").readlines()
+    move_list = [line.strip() for line in all_line]
+
+    image_path_list = sorted(os.listdir(args.input_pred))
     image_path_list = [args.input_pred + '/' + path for path in image_path_list]
+    image_path_list = image_path_list[:len(move_list)]  # remove empty moves
+
+
+    words_list = [i for i in range(len(move_list))]
+    print(f"before shuffle words_list: {words_list}")
+    np.random.shuffle(words_list)
+    print(f"after shuffle words_list: {words_list}")
+    split_idx = int(train_ratio["train"] * len(words_list))
+    train_samples = words_list[:split_idx]
+    test_samples = words_list[split_idx:]
+
+    validation_ratio = train_ratio["validation"] / (1 - train_ratio["train"])
+    val_split_idx = int(validation_ratio * len(test_samples))
+    validation_samples = test_samples[:val_split_idx]
+    test_samples = test_samples[val_split_idx:]
+
+    # Print splitting results
+    print(f"Number of words_list: {len(words_list)}")
+    print(f"Total training samples: {len(train_samples)}")
+    print(f"Total validation samples: {len(validation_samples)}")
+    print(f"Total test samples: {len(test_samples)}")
+
+    def get_image_paths_and_labels(samples):
+        paths = []
+        corrected_samples = []
+        for i in samples:
+            paths.append(image_path_list[i])
+            corrected_samples.append(move_list[i])
+
+        return paths, corrected_samples
+
+    train_img_paths, train_labels = get_image_paths_and_labels(train_samples)
+    validation_img_paths, validation_labels = get_image_paths_and_labels(validation_samples)
+    test_img_paths, test_labels = get_image_paths_and_labels(test_samples)
 
     ret = {
-        "all": {"img_paths": image_path_list,
-                "labels": ['dummy' for i in range(len(image_path_list))]},
+        "train":      {"img_paths": train_img_paths,
+                       "labels": train_labels},
+        "validation": {"img_paths": validation_img_paths,
+                       "labels": validation_labels},
+        "test":       {"img_paths": test_img_paths,
+                       "labels": test_labels},
            }
 
     return ret
@@ -179,8 +220,9 @@ def main(args):
     ######################
     # Dataset preprocess #
     ######################
-    dataset_map_ncs = get_dataset_ncs(args)
+    dataset_map = get_dataset_ncs(args)
 
+    print("characters:", characters_list)
     print("Maximum length: ", max_len)
     print("Vocab size: ", len(characters_list))
 
@@ -194,6 +236,42 @@ def main(args):
         vocabulary=char_to_num.get_vocabulary(), mask_token=None, invert=True
     )
 
+    train_ds = prepare_dataset(dataset_map["train"]["img_paths"],
+                               dataset_map["train"]["labels"])
+    validation_ds = prepare_dataset(dataset_map["validation"]["img_paths"],
+                                    dataset_map["validation"]["labels"])
+    test_ds = prepare_dataset(dataset_map["test"]["img_paths"],
+                              dataset_map["test"]["labels"])
+
+    # print dataset samples
+    for data in train_ds.take(1):
+        images, labels = data["image"], data["label"]
+
+        _, ax = plt.subplots(4, 4, figsize=(15, 8))
+
+        for i in range(16):
+            img = images[i]
+            img = tf.image.flip_left_right(img)
+            img = tf.transpose(img, perm=[1, 0, 2])
+            img = (img * 255.0).numpy().clip(0, 255).astype(np.uint8)
+            img = img[:, :, 0]
+
+            # Gather indices where label!= padding_token.
+            label = labels[i]
+            indices = tf.gather(label, tf.where(
+                tf.math.not_equal(label, model_params.padding_token)))
+            # Convert to string.
+            label = tf.strings.reduce_join(num_to_char(indices))
+            label = label.numpy().decode("utf-8")
+
+            title = f"{label}"
+            ax[i // 4, i % 4].imshow(img, cmap="gray")
+            ax[i // 4, i % 4].set_title(title)
+            ax[i // 4, i % 4].axis("off")
+
+    if not args.not_plt_save:
+        plt.savefig(os.path.join(args.output, 'input_samples.png'))
+
     ################
     # Define model #
     ################
@@ -203,6 +281,66 @@ def main(args):
         model.get_layer(name="image").input, model.get_layer(name="dense2").output
     )
     prediction_model.summary()
+
+    ############
+    # Training #
+    ############
+    # Define current accuracy value to print in the progress log
+    validation_images = []
+    validation_labels = []
+    for batch in validation_ds:
+        validation_images.append(batch["image"])
+        validation_labels.append(batch["label"])
+
+    def calculate_edit_distance(labels, predictions):
+        # Get a single batch and convert its labels to sparse tensors.
+        saprse_labels = tf.cast(tf.sparse.from_dense(labels), dtype=tf.int64)
+
+        # Make predictions and convert them to sparse tensors.
+        input_len = np.ones(predictions.shape[0]) * predictions.shape[1]
+        predictions_decoded = keras.backend.ctc_decode(
+            predictions, input_length=input_len, greedy=True
+        )[0][0][:, :max_len]
+        sparse_predictions = tf.cast(
+            tf.sparse.from_dense(predictions_decoded), dtype=tf.int64
+        )
+
+        # Compute individual edit distances and average them out.
+        edit_distances = tf.edit_distance(
+            sparse_predictions, saprse_labels, normalize=False
+        )
+        return tf.reduce_mean(edit_distances)
+
+    class EditDistanceCallback(keras.callbacks.Callback):
+        def __init__(self, pred_model):
+            super().__init__()
+            self.prediction_model = pred_model
+
+        def on_epoch_end(self, epoch, logs=None):
+            edit_distances = []
+
+            for i in range(len(validation_images)):
+                labels = validation_labels[i]
+                predictions = self.prediction_model.predict(validation_images[i])
+                edit_distances.append(calculate_edit_distance(labels, predictions).numpy())
+
+            print(
+                f"Mean edit distance for epoch {epoch + 1}: {np.mean(edit_distances):.4f}"
+            )
+
+    prediction_model = keras.models.Model(
+        model.get_layer(name="image").input, model.get_layer(name="dense2").output
+    )
+    edit_distance_callback = EditDistanceCallback(prediction_model)
+    if args.train_model:
+        model.fit(
+            train_ds,
+            validation_data=validation_ds,
+            epochs=args.epoch_num,
+            callbacks=[edit_distance_callback],
+        )
+
+        model.save(args.output)
 
     ########
     # Test #
@@ -228,8 +366,8 @@ def main(args):
         return output_text, results_confidence
 
     #  Let's check results on some test samples.
-    img_paths = dataset_map_ncs["all"]["img_paths"]
-    labels = dataset_map_ncs["all"]["labels"]
+    img_paths = dataset_map["test"]["img_paths"]
+    labels = dataset_map["test"]["labels"]
     test_ds = prepare_dataset(img_paths, labels)
 
     f = open(os.path.join(args.output, "ncs_predict_result.txt"), 'w')
@@ -275,9 +413,14 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--input_pred', default="data/kanagawa_champ_2023/images_move/1/")
+    parser.add_argument('--input_label', default="data/kanagawa_champ_2023/label/1.txt")
     parser.add_argument('--output', default="output_ncs")
     parser.add_argument('--pretrained_model', default="output_model_hcs/")
     parser.add_argument('--random_seed', '-r', type=int, default=None)
+    parser.add_argument('--train_model', action='store_true')
+    parser.add_argument('--epoch_num', '-e', type=int, default=50,
+                        help='Shold be at least 50 for good accuracy')
+    parser.add_argument('--not_plt_save', '-p', action='store_true')
     args = parser.parse_args()
 
     main(args)
