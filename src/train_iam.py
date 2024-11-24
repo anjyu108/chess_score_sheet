@@ -281,6 +281,8 @@ def main(args):
         np.random.seed(args.random_seed)
         tf.random.set_seed(args.random_seed)
 
+    os.makedirs(args.output, exist_ok=True)
+
     ######################
     # Dataset preprocess #
     ######################
@@ -469,8 +471,8 @@ if __name__ == '__main__':
     parser.add_argument('--random_seed', '-r', type=int, default=None)
     parser.add_argument('--epoch_num', '-e', type=int, default=50,
                         help='Shold be at least 50 for good accuracy')
-    parser.add_argument('--plt_show', '-p', action='store_true')
-    parser.add_argument('--no_plt_save', '-p', action='store_true')
+    parser.add_argument('--plt_show', action='store_true')
+    parser.add_argument('--no_plt_save', action='store_true')
     args = parser.parse_args()
 
     main(args)
