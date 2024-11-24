@@ -25,7 +25,7 @@ for f in $(ls data/kanagawa_champ_2023/images/);do
     # NOTE: set --move_num appropriately to remove blank move
     python3 src/ncs_split.py \
         --input data/kanagawa_champ_2023/images/${f} \
-        --output data/kanagawa_champ_2023/images_move/${f}/
+        --output data/kanagawa_champ_2023/images_move/${f}
 done
 ls data/kanagawa_champ_2023/images_move/1/  # 0001_0white.png, 0001_1black.png, ...
 
