@@ -345,6 +345,8 @@ def main(args):
 
     if args.plt_show:
         plt.show()
+    if not args.no_plt_save:
+        plt.savefig(os.path.join(args.output, 'input_samples.png'))
 
     ################
     # Define model #
@@ -456,16 +458,19 @@ def main(args):
 
     if args.plt_show:
         plt.show()
+    if not args.no_plt_save:
+        plt.savefig(os.path.join(args.output, 'predict_samples.png'))
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input', '-i', default="data/")
+    parser.add_argument('--input', '-i', default="data/IAM")
     parser.add_argument('--output', '-o', default="output_model/")
     parser.add_argument('--random_seed', '-r', type=int, default=None)
-    parser.add_argument('--epoch_num', '-e', type=int, default=1,
+    parser.add_argument('--epoch_num', '-e', type=int, default=50,
                         help='Shold be at least 50 for good accuracy')
     parser.add_argument('--plt_show', '-p', action='store_true')
+    parser.add_argument('--no_plt_save', '-p', action='store_true')
     args = parser.parse_args()
 
     main(args)
