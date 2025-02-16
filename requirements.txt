@@ -6,3 +6,6 @@ chess==1.10.0
 Levenshtein==0.25.0
 pandas==2.0.3
 PyMuPDF==1.24.14
+openai==1.63.0
+python-dotenv==1.0.1
+google-genai==1.2.0

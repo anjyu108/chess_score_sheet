@@ -6,13 +6,17 @@ from abc import abstractmethod, ABC
 from dotenv import load_dotenv
 from openai import OpenAI
 import mimetypes
+from google import genai
 
 
 def main(args):
-    pgn_gen_openai = PGN_GEN_OPENAI(args.environ_path,
+    # pgn_gen_openai = PGN_GEN_OPENAI(args.environ_path,
+    #                                 args.input_image_path + "_debug.log")
+    pgn_gen_openai = PGN_GEN_GEMINI(args.environ_path,
                                     args.input_image_path + "_debug.log")
     pgn_data, input_token, output_token = \
         pgn_gen_openai.generate_pgn(args.input_image_path)
+
     with open(args.input_image_path + ".pgn", "w") as f:
         print(pgn_data, file=f)
     with open(args.input_image_path + "_input_token.txt", "w") as f:
@@ -136,6 +140,31 @@ class PGN_GEN_OPENAI(PGN_GEN):
         )
 
         return pgn_data, tokens["input"], tokens["output"]
+
+
+class PGN_GEN_GEMINI(PGN_GEN):
+    def __init__(self, environ_path, debug_log_path):
+        self.debug_log_f = open(debug_log_path, "w")
+        load_dotenv(environ_path, override=True)
+        self.MODEL_NAME = os.getenv("GEMINI_MODEL_NAME")
+        # self.INPUT_TOKEN_COST_DOLLAR_PER_1M_TOKEN = float(os.getenv("INPUT_TOKEN_COST_DOLLAR_PER_1M_TOKEN"))
+        # self.OUTPUT_TOKEN_COST_DOLLAR_PER_1M_TOKEN = float(os.getenv("OUTPUT_TOKEN_COST_DOLLAR_PER_1M_TOKEN"))
+        self.client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+
+    def generate_pgn(self, input_image_path):
+        print(f"Executed datetime: {datetime.datetime.today()}",
+              file=self.debug_log_f)
+        prompt = "Generate PGN data from the input chess handwriting scoresheet image. The response contexnt should NOT include anything other than the PGN data."
+        response = self.client.models.generate_content(
+            model=self.MODEL_NAME,
+            contents=prompt,
+        )
+        print(response, file=self.debug_log_f)
+
+        ret = (response.text,
+               response.usage_metadata.prompt_token_count,
+               response.usage_metadata.candidates_token_count)
+        return ret
 
 
 if __name__ == "__main__":
