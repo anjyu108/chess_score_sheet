@@ -11,11 +11,14 @@ import mimetypes
 def main(args):
     pgn_gen_openai = PGN_GEN_OPENAI(args.environ_path,
                                     args.input_image_path + "_debug.log")
-    pgn_data, total_cost = pgn_gen_openai.generate_pgn(args.input_image_path)
+    pgn_data, input_token, output_token = \
+        pgn_gen_openai.generate_pgn(args.input_image_path)
     with open(args.input_image_path + ".pgn", "w") as f:
         print(pgn_data, file=f)
-    with open(args.input_image_path + "_price.txt", "w") as f:
-        print(total_cost, file=f)
+    with open(args.input_image_path + "_input_token.txt", "w") as f:
+        print(input_token, file=f)
+    with open(args.input_image_path + "_output_token.txt", "w") as f:
+        print(output_token, file=f)
 
 
 class PGN_GEN(ABC):
@@ -26,7 +29,8 @@ class PGN_GEN(ABC):
 
         Returns:
             str: PGN data representing the scoresheet.
-            float: cost to generate the PGN data in dollar.
+            float: input token
+            float: output token
         """
         pass
 
@@ -131,7 +135,7 @@ class PGN_GEN_OPENAI(PGN_GEN):
             file=self.debug_log_f,
         )
 
-        return pgn_data, input_cost + output_cost
+        return pgn_data, tokens["input"], tokens["output"]
 
 
 if __name__ == "__main__":
