@@ -6,3 +6,4 @@ output_model*
 output_ncs*
 trash
 .env
+node_modules

@@ -31,3 +31,24 @@ ls data/kanagawa_champ_2023/images_move/1/  # 0001_0white.png, 0001_1black.png, 
 
 python3 src/predict_ncs_sheet.py
 ```
+
+# NOTE
+## for React app development
+ref: https://meetup-jp.nhncloud.com/1883
+1. Install nodejs
+  - folow https://nodejs.org/ja
+2. run
+```bash
+npm install -g expo-cli
+npm install @expo/config@8.1.1
+npm install @expo/metro-config@0.10.0
+
+$Env:NODE_ENV = "development"
+
+# maybe, npx expo init ...
+npx expo init react_app
+cd react_app
+npx expo start --web
+# npx expo start --android
+# npx expo start --ios
+```
