@@ -4,10 +4,10 @@ import os
 
 def main(args):
     with open(args.target_pgn_path) as f:
-        target_data = f.read().split("\n\n")[-1].split()
+        target_data = f.read().strip().split("\n\n")[-1].split()
         target_data = [x for x in target_data if "```" not in x]
     with open(args.answer_pgn_path) as f:
-        answer_data = f.read().split("\n\n")[-1].split()
+        answer_data = f.read().strip().split("\n\n")[-1].split()
         answer_data = [x for x in answer_data if "```" not in x]
     if args.debug:
         print(f"target_data: {target_data}")
